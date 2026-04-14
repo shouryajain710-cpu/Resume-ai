@@ -1,45 +1,56 @@
-import { connectDB } from "@/lib/mongodb";
-import CoverLetter from "@/models/CoverLetter";
-
 export async function POST(req) {
-  const { resumeText, role } = await req.json();
-
   try {
+    const { resumeText, role } = await req.json();
+
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
+        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
       },
       body: JSON.stringify({
         model: "openrouter/auto",
         messages: [
           {
             role: "user",
-            content: `Write a professional cover letter for this job role: ${role}
-            
-Resume:
-${resumeText}
-
-Make it concise and professional.`,
+            content: `Write a professional cover letter for ${role} using this resume:\n${resumeText}`,
           },
         ],
       }),
     });
 
+    
+    if (!response.ok) {
+      const text = await response.text();
+      console.error("OPENROUTER ERROR:", text);
+
+      return Response.json(
+        { error: "AI API failed", details: text },
+        { status: 500 }
+      );
+    }
+
     const data = await response.json();
 
-    console.log("API RESPONSE:", data);
+    console.log("AI RESPONSE:", data); // 👈 IMPORTANT
 
-    return Response.json({
-      result: data.choices?.[0]?.message?.content,
-    });
+    const resultText =
+      data?.choices?.[0]?.message?.content;
+
+    if (!resultText) {
+      return Response.json({
+        result: "⚠️ AI returned empty response",
+      });
+    }
+
+    return Response.json({ result: resultText });
 
   } catch (error) {
-    console.error("ERROR:", error);
+    console.error("SERVER ERROR:", error);
 
-    return Response.json({
-      error: error.message,
-    });
+    return Response.json(
+      { error: "Server failed" },
+      { status: 500 }
+    );
   }
 }
